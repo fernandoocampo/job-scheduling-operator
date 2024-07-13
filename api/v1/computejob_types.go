@@ -20,22 +20,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // ComputeJobSpec defines the desired state of ComputeJob
 type ComputeJobSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of ComputeJob. Edit computejob_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// The command to run as a job
+	Command string `json:"command"`
+	// Criteria for selecting nodes to run the job
+	NodeSelector string `json:"nodeSelector"`
+	// The number of nodes the job should run on simultaneously
+	// +kubebuilder:validation:Minimum=1
+	Parallelism int32 `json:"parallelism"`
 }
 
 // ComputeJobStatus defines the observed state of ComputeJob
 type ComputeJobStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	State       string `json:"state"`
+	StartTime   string `json:"startTime"`
+	EndTime     string `json:"endTime"`
+	ActiveNodes string `json:"activeNodes"`
 }
 
 // +kubebuilder:object:root=true

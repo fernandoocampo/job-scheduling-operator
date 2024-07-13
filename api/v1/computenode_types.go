@@ -20,22 +20,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Resources The resources available to the node (CPU, memory)
+type Resources struct {
+	// CPU available to the node in millicores
+	CPU string `json:"cpu"`
+	// Memory available to the node in MB
+	Memory string `json:"memory"`
+}
 
 // ComputeNodeSpec defines the desired state of ComputeNode
 type ComputeNodeSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of ComputeNode. Edit computenode_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Resources available to the node
+	Resources Resources `json:"resources"`
 }
 
 // ComputeNodeStatus defines the observed state of ComputeNode
 type ComputeNodeStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	State string `json:"state"`
 }
 
 // +kubebuilder:object:root=true
