@@ -1,0 +1,27 @@
+# permissions for end users to edit computejobs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computejob-editor-role
+rules:
+- apiGroups:
+  - job-scheduling-operator.openinnovation.ai
+  resources:
+  - computejobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - job-scheduling-operator.openinnovation.ai
+  resources:
+  - computejobs/status
+  verbs:
+  - get
