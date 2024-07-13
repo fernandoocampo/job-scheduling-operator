@@ -1,0 +1,27 @@
+# permissions for end users to edit computenodes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computenode-editor-role
+rules:
+- apiGroups:
+  - job-scheduling-operator.openinnovation.ai
+  resources:
+  - computenodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - job-scheduling-operator.openinnovation.ai
+  resources:
+  - computenodes/status
+  verbs:
+  - get

@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- job-scheduling-operator_v1_computenode.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: job-scheduling-operator
 repo: github.com/fernandoocampo/job-scheduling-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openinnovation.ai
+  group: job-scheduling-operator
+  kind: ComputeNode
+  path: github.com/fernandoocampo/job-scheduling-operator/api/v1
+  version: v1
 version: "3"

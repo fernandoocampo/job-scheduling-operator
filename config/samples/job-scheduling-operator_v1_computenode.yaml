@@ -1,0 +1,9 @@
+apiVersion: job-scheduling-operator.openinnovation.ai/v1
+kind: ComputeNode
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computenode-sample
+spec:
+  # TODO(user): Add fields here

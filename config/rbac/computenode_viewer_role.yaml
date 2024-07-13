@@ -1,0 +1,23 @@
+# permissions for end users to view computenodes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computenode-viewer-role
+rules:
+- apiGroups:
+  - job-scheduling-operator.openinnovation.ai
+  resources:
+  - computenodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - job-scheduling-operator.openinnovation.ai
+  resources:
+  - computenodes/status
+  verbs:
+  - get
