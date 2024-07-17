@@ -4,7 +4,9 @@ metadata:
   labels:
     app.kubernetes.io/name: job-scheduling-operator
     app.kubernetes.io/managed-by: kustomize
-  name: computejob-sample
+  name: computejob-sample-node
 spec:
   command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(2000)"]
   parallelism: 1
+  nodeSelector:
+    kubernetes.io/hostname: kind-3-worker2

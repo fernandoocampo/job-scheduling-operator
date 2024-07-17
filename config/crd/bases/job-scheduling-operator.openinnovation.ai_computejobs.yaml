@@ -41,10 +41,14 @@ spec:
             properties:
               command:
                 description: The command to run as a job
-                type: string
+                items:
+                  type: string
+                type: array
               nodeSelector:
+                additionalProperties:
+                  type: string
                 description: Criteria for selecting nodes to run the job
-                type: string
+                type: object
               parallelism:
                 description: The number of nodes the job should run on simultaneously
                 format: int32
@@ -52,7 +56,6 @@ spec:
                 type: integer
             required:
             - command
-            - nodeSelector
             - parallelism
             type: object
           status:

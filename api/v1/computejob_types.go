@@ -23,9 +23,9 @@ import (
 // ComputeJobSpec defines the desired state of ComputeJob
 type ComputeJobSpec struct {
 	// The command to run as a job
-	Command string `json:"command"`
+	Command []string `json:"command"`
 	// Criteria for selecting nodes to run the job
-	NodeSelector string `json:"nodeSelector"`
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 	// The number of nodes the job should run on simultaneously
 	// +kubebuilder:validation:Minimum=1
 	Parallelism int32 `json:"parallelism"`
