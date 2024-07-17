@@ -22,14 +22,16 @@ import (
 
 // Resources The resources available to the node (CPU, memory)
 type Resources struct {
-	// CPU available to the node in millicores
-	CPU string `json:"cpu"`
+	// CPU available to the node in cores
+	CPU int32 `json:"cpu"`
 	// Memory available to the node in MB
-	Memory string `json:"memory"`
+	Memory int32 `json:"memory"`
 }
 
 // ComputeNodeSpec defines the desired state of ComputeNode
 type ComputeNodeSpec struct {
+	// Node name which represents this object
+	Node string `json:"node"`
 	// Resources available to the node
 	Resources Resources `json:"resources"`
 }

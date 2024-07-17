@@ -39,20 +39,26 @@ spec:
           spec:
             description: ComputeNodeSpec defines the desired state of ComputeNode
             properties:
+              node:
+                description: Node name which represents this object
+                type: string
               resources:
                 description: Resources available to the node
                 properties:
                   cpu:
-                    description: CPU available to the node in millicores
-                    type: string
+                    description: CPU available to the node in cores
+                    format: int32
+                    type: integer
                   memory:
                     description: Memory available to the node in MB
-                    type: string
+                    format: int32
+                    type: integer
                 required:
                 - cpu
                 - memory
                 type: object
             required:
+            - node
             - resources
             type: object
           status:

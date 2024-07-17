@@ -44,7 +44,7 @@ func TestCreateJob(t *testing.T) {
 	t.Parallel()
 	// Given
 	ctrl.SetLogger(zap.New())
-	scheme := buildScheme(t)
+	scheme := buildComputeJobControllerSchemes(t)
 	expectedReconcileResult := ctrl.Result{}
 	expectedComputeJob := jobschedulingoperatorv1.ComputeJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -127,7 +127,7 @@ func TestDoNothing(t *testing.T) {
 	t.Parallel()
 	// Given
 	ctrl.SetLogger(zap.New())
-	scheme := buildScheme(t)
+	scheme := buildComputeJobControllerSchemes(t)
 	expectedReconcileResult := ctrl.Result{}
 	expectedComputeJob := jobschedulingoperatorv1.ComputeJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -182,7 +182,7 @@ func TestUpdateComputeJobStateToRunning(t *testing.T) {
 	t.Parallel()
 	// Given
 	ctrl.SetLogger(zap.New())
-	scheme := buildScheme(t)
+	scheme := buildComputeJobControllerSchemes(t)
 	expectedReconcileResult := ctrl.Result{}
 	expectedComputeJob := jobschedulingoperatorv1.ComputeJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -279,7 +279,7 @@ func TestUpdateComputeJobStateToCompleted(t *testing.T) {
 	t.Parallel()
 	// Given
 	ctrl.SetLogger(zap.New())
-	scheme := buildScheme(t)
+	scheme := buildComputeJobControllerSchemes(t)
 	expectedReconcileResult := ctrl.Result{}
 	expectedComputeJob := jobschedulingoperatorv1.ComputeJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -372,7 +372,7 @@ func TestUpdateComputeJobStateToFailed(t *testing.T) {
 	t.Parallel()
 	// Given
 	ctrl.SetLogger(zap.New())
-	scheme := buildScheme(t)
+	scheme := buildComputeJobControllerSchemes(t)
 	expectedReconcileResult := ctrl.Result{}
 	expectedComputeJob := jobschedulingoperatorv1.ComputeJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -463,7 +463,7 @@ func TestUpdateJobDueToUndesiredState(t *testing.T) {
 	t.Parallel()
 	// Given
 	ctrl.SetLogger(zap.New())
-	scheme := buildScheme(t)
+	scheme := buildComputeJobControllerSchemes(t)
 	expectedReconcileResult := ctrl.Result{}
 	expectedBatchJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -578,7 +578,7 @@ func getBatchJob(ctx context.Context, t *testing.T, client client.WithWatch, key
 	return &job
 }
 
-func buildScheme(t *testing.T) *runtime.Scheme {
+func buildComputeJobControllerSchemes(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	err := jobschedulingoperatorv1.AddToScheme(scheme)

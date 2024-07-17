@@ -14,71 +14,223 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package controller_test
 
 import (
 	"context"
+	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	jobschedulingoperatorv1 "github.com/fernandoocampo/job-scheduling-operator/api/v1"
+	"github.com/fernandoocampo/job-scheduling-operator/internal/controller"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("ComputeNode Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+func TestUpdateComputeNodeStateToRunning(t *testing.T) {
+	t.Parallel()
+	// Given
+	ctrl.SetLogger(zap.New())
+	scheme := buildComputeNodeControllerSchemes(t)
+	expectedReconcileResult := ctrl.Result{}
+	expectedComputeNode := jobschedulingoperatorv1.ComputeNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "computenode-sample",
+			Namespace: "default",
+		},
+		Spec: jobschedulingoperatorv1.ComputeNodeSpec{
+			Node: "kind-2-worker",
+			Resources: jobschedulingoperatorv1.Resources{
+				CPU:    8,
+				Memory: 6060,
+			},
+		},
+		Status: jobschedulingoperatorv1.ComputeNodeStatus{
+			State: "Running",
+		},
+	}
+	existingNode := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"kubernetes.io/hostname": "kind-2-worker",
+			},
+			Annotations: make(map[string]string),
+			Name:        "kind-2-worker",
+		},
+		Spec: corev1.NodeSpec{},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{
+					Status: corev1.ConditionTrue,
+					Type:   corev1.NodeReady,
+				},
+			},
+		},
+	}
+	givenComputeNode := &jobschedulingoperatorv1.ComputeNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "computenode-sample",
+			Namespace: "default",
+		},
+		Spec: jobschedulingoperatorv1.ComputeNodeSpec{
+			Node: "kind-2-worker",
+			Resources: jobschedulingoperatorv1.Resources{
+				CPU:    8,
+				Memory: 6060,
+			},
+		},
+		Status: jobschedulingoperatorv1.ComputeNodeStatus{
+			State: "pending",
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(givenComputeNode, existingNode).
+		WithScheme(scheme).
+		WithStatusSubresource(givenComputeNode).
+		Build()
+	reconciler := controller.ComputeNodeReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+	}
+	ctx := context.TODO()
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      "computenode-sample",
+		},
+	}
+	// When
+	got, err := reconciler.Reconcile(ctx, req)
 
-		ctx := context.Background()
+	// Then
+	require.NoError(t, err)
+	assert.Equal(t, expectedReconcileResult, got)
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
-		}
-		computenode := &jobschedulingoperatorv1.ComputeNode{}
+	gottenComputeNode := getComputeNode(ctx, t, k8sClient, types.NamespacedName{Namespace: "default", Name: "computenode-sample"})
 
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind ComputeNode")
-			err := k8sClient.Get(ctx, typeNamespacedName, computenode)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &jobschedulingoperatorv1.ComputeNode{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
+	assert.NotNil(t, gottenComputeNode)
+	assert.Equal(t, expectedComputeNode.Spec, gottenComputeNode.Spec)
+	assert.Equal(t, expectedComputeNode.Status, gottenComputeNode.Status)
+}
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &jobschedulingoperatorv1.ComputeNode{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+func TestUpdateComputeNodeStateToPending(t *testing.T) {
+	t.Parallel()
+	// Given
+	ctrl.SetLogger(zap.New())
+	scheme := buildComputeNodeControllerSchemes(t)
+	expectedReconcileResult := ctrl.Result{}
+	expectedComputeNode := jobschedulingoperatorv1.ComputeNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "computenode-sample",
+			Namespace: "default",
+		},
+		Spec: jobschedulingoperatorv1.ComputeNodeSpec{
+			Node: "kind-2-worker",
+			Resources: jobschedulingoperatorv1.Resources{
+				CPU:    8,
+				Memory: 6060,
+			},
+		},
+		Status: jobschedulingoperatorv1.ComputeNodeStatus{
+			State: "Pending",
+		},
+	}
+	existingNode := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"kubernetes.io/hostname": "kind-2-worker",
+			},
+			Annotations: make(map[string]string),
+			Name:        "kind-2-worker",
+		},
+		Spec: corev1.NodeSpec{},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{
+					Status: corev1.ConditionFalse,
+					Type:   corev1.NodeReady,
+				},
+			},
+		},
+	}
+	givenComputeNode := &jobschedulingoperatorv1.ComputeNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "computenode-sample",
+			Namespace: "default",
+		},
+		Spec: jobschedulingoperatorv1.ComputeNodeSpec{
+			Node: "kind-2-worker",
+			Resources: jobschedulingoperatorv1.Resources{
+				CPU:    8,
+				Memory: 6060,
+			},
+		},
+		Status: jobschedulingoperatorv1.ComputeNodeStatus{
+			State: "running",
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(givenComputeNode, existingNode).
+		WithScheme(scheme).
+		WithStatusSubresource(givenComputeNode).
+		Build()
+	reconciler := controller.ComputeNodeReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+	}
+	ctx := context.TODO()
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      "computenode-sample",
+		},
+	}
+	// When
+	got, err := reconciler.Reconcile(ctx, req)
 
-			By("Cleanup the specific resource instance ComputeNode")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &ComputeNodeReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+	// Then
+	require.NoError(t, err)
+	assert.Equal(t, expectedReconcileResult, got)
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
-		})
-	})
-})
+	gottenComputeNode := getComputeNode(ctx, t, k8sClient, types.NamespacedName{Namespace: "default", Name: "computenode-sample"})
+
+	assert.NotNil(t, gottenComputeNode)
+	assert.Equal(t, expectedComputeNode.Spec, gottenComputeNode.Spec)
+	assert.Equal(t, expectedComputeNode.Status, gottenComputeNode.Status)
+}
+
+func buildComputeNodeControllerSchemes(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	err := jobschedulingoperatorv1.AddToScheme(scheme)
+	require.NoErrorf(t, err, "unexpected error adding job scheduling operator v1 to scheme")
+
+	corev1.AddToScheme(scheme)
+	require.NoErrorf(t, err, "unexpected error adding corev1 to scheme")
+
+	return scheme
+}
+
+func getComputeNode(ctx context.Context, t *testing.T, client client.WithWatch, key types.NamespacedName) *jobschedulingoperatorv1.ComputeNode {
+	t.Helper()
+
+	var computeNode jobschedulingoperatorv1.ComputeNode
+
+	err := client.Get(ctx, key, &computeNode)
+	if errors.IsNotFound(err) {
+		return nil
+	}
+	require.NoError(t, err)
+
+	return &computeNode
+}
