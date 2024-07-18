@@ -2,6 +2,7 @@
 IMG ?= openinnovation.ai/operators/job-scheduling-operator:0.1.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.30.0
+KIND_CLUSTER ?= kind
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -66,7 +67,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
 test-e2e:
-	go test ./test/e2e/ -v -ginkgo.v
+	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -142,6 +143,22 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: create-kind-cluster
+create-kind-cluster: ## create a kind cluster
+	KIND_EXPERIMENTAL_PROVIDER=$(CONTAINER_TOOL) kind create cluster --config=kind-cluster/cluster-one-node.yaml --name kind
+
+.PHONY: delete-kind-cluster
+delete-kind-cluster: ## delete a kind cluster
+	kind delete cluster -n kind
+
+.PHONY: create-compute-node
+create-compute-node: # create compute node
+	kubectl apply -f config/samples/job-scheduling-operator_v1_computenode_kind.yaml
+
+.PHONY: create-compute-job
+create-compute-job: # create compute job
+	kubectl apply -f config/samples/job-scheduling-operator_v1_computejob_kind.yaml
 
 ##@ Dependencies
 

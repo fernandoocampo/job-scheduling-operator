@@ -60,7 +60,7 @@ var _ = Describe("controller", Ordered, func() {
 			var err error
 
 			// projectimage stores the name of the image used in the example
-			var projectimage = "example.com/job-scheduling-operator:v0.0.1"
+			var projectimage = "openinnovation.ai/operators/job-scheduling-operator:0.1.0"
 
 			By("building the manager(Operator) image")
 			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
@@ -117,6 +117,108 @@ var _ = Describe("controller", Ordered, func() {
 			}
 			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
 
+		})
+	})
+
+	Context("compute node objects", func() {
+		It("should run successfully", func() {
+			By("creating compute node")
+			cmd := exec.Command("make", "create-compute-node")
+			_, err := utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("validating that the computejob was created")
+			verifyControllerUp := func() error {
+				cmd = exec.Command("kubectl", "get", "computenodes.job-scheduling-operator.openinnovation.ai",
+					"computenode-sample", "-n", namespace,
+					"-o", "jsonpath={.status.state}",
+				)
+				status, err := utils.Run(cmd)
+				ExpectWithOffset(2, err).NotTo(HaveOccurred())
+				if string(status) != "Running" {
+					return fmt.Errorf("compute node in %s status", status)
+				}
+				return nil
+			}
+			EventuallyWithOffset(1, verifyControllerUp, 5*time.Minute, time.Second).Should(Succeed())
+		})
+	})
+
+	Context("compute node object creation", func() {
+		It("should run successfully", func() {
+			By("creating compute node")
+			cmd := exec.Command("make", "create-compute-node")
+			_, err := utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("validating that the computenode was created")
+			verifyControllerUp := func() error {
+				cmd = exec.Command("kubectl", "get", "computenodes.job-scheduling-operator.openinnovation.ai",
+					"computenode-sample", "-n", namespace,
+					"-o", "jsonpath={.status.state}",
+				)
+				status, err := utils.Run(cmd)
+				ExpectWithOffset(2, err).NotTo(HaveOccurred())
+				if string(status) != "Running" {
+					return fmt.Errorf("compute node in %s status", status)
+				}
+				return nil
+			}
+			EventuallyWithOffset(1, verifyControllerUp, 2*time.Minute, time.Second).Should(Succeed())
+		})
+	})
+
+	Context("compute job object creation", func() {
+		It("should run successfully", func() {
+			By("creating compute job")
+			cmd := exec.Command("make", "create-compute-job")
+			_, err := utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			By("validating that the computejob was created")
+			verifyControllerUp := func() error {
+				cmd = exec.Command("kubectl", "get", "computejobs.job-scheduling-operator.openinnovation.ai",
+					"computejob-sample", "-n", namespace,
+					"-o", "jsonpath={.status.state}",
+				)
+				status, err := utils.Run(cmd)
+				ExpectWithOffset(2, err).NotTo(HaveOccurred())
+				if string(status) != "Pending" {
+					return fmt.Errorf("compute node in %s status", status)
+				}
+				return nil
+			}
+			EventuallyWithOffset(1, verifyControllerUp, 3*time.Minute, time.Second).Should(Succeed())
+
+			By("validating that the computejob was in running state")
+			verifyControllerUp = func() error {
+				cmd = exec.Command("kubectl", "get", "computejobs.job-scheduling-operator.openinnovation.ai",
+					"computejob-sample", "-n", namespace,
+					"-o", "jsonpath={.status.state}",
+				)
+				status, err := utils.Run(cmd)
+				ExpectWithOffset(2, err).NotTo(HaveOccurred())
+				if string(status) != "running" {
+					return fmt.Errorf("compute node in %s status", status)
+				}
+				return nil
+			}
+			EventuallyWithOffset(1, verifyControllerUp, 3*time.Minute, time.Second).Should(Succeed())
+
+			By("validating that the computejob was in completed state")
+			verifyControllerUp = func() error {
+				cmd = exec.Command("kubectl", "get", "computejobs.job-scheduling-operator.openinnovation.ai",
+					"computejob-sample", "-n", namespace,
+					"-o", "jsonpath={.status.state}",
+				)
+				status, err := utils.Run(cmd)
+				ExpectWithOffset(2, err).NotTo(HaveOccurred())
+				if string(status) != "completed" {
+					return fmt.Errorf("compute node in %s status", status)
+				}
+				return nil
+			}
+			EventuallyWithOffset(1, verifyControllerUp, 3*time.Minute, time.Second).Should(Succeed())
 		})
 	})
 })

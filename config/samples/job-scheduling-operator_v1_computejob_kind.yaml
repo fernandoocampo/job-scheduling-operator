@@ -1,0 +1,13 @@
+apiVersion: job-scheduling-operator.openinnovation.ai/v1
+kind: ComputeJob
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computejob-sample
+  namespace: job-scheduling-operator-system
+spec:
+  command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(2000)"]
+  parallelism: 1
+  nodeSelector:
+    nodeName: kind-worker

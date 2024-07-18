@@ -49,6 +49,7 @@ type ComputeJobReconciler struct {
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computejobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computejobs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computejobs/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 
 // Keys
 const (
