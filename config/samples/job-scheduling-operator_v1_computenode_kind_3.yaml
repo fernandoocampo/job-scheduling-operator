@@ -1,0 +1,38 @@
+apiVersion: job-scheduling-operator.openinnovation.ai/v1
+kind: ComputeNode
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computenode-sample
+spec:
+  node: kind-3-worker
+  resources:
+    cpu: 8
+    memory: 6060
+---
+apiVersion: job-scheduling-operator.openinnovation.ai/v1
+kind: ComputeNode
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computenode-sample-2
+spec:
+  node: kind-3-worker2
+  resources:
+    cpu: 100
+    memory: 6060
+---
+apiVersion: job-scheduling-operator.openinnovation.ai/v1
+kind: ComputeNode
+metadata:
+  labels:
+    app.kubernetes.io/name: job-scheduling-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: computenode-sample-3
+spec:
+  node: kind-3-worker3
+  resources:
+    cpu: 100
+    memory: 6060

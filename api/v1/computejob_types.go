@@ -20,12 +20,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// NodeSelector criteria for selecting nodes to run the job
+type NodeSelector struct {
+	// CPU required by the job
+	// +kubebuilder:validation:Minimum=1
+	CPU *int32 `json:"cpu,omitempty"`
+	// Node name to run the job
+	NodeName *string `json:"nodeName,omitempty"`
+}
+
 // ComputeJobSpec defines the desired state of ComputeJob
 type ComputeJobSpec struct {
 	// The command to run as a job
 	Command []string `json:"command"`
 	// Criteria for selecting nodes to run the job
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	NodeSelector *NodeSelector `json:"nodeSelector,omitempty"`
 	// The number of nodes the job should run on simultaneously
 	// +kubebuilder:validation:Minimum=1
 	Parallelism int32 `json:"parallelism"`

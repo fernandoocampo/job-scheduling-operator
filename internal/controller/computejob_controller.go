@@ -18,13 +18,12 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,73 +35,24 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	jobapiv1 "github.com/fernandoocampo/job-scheduling-operator/api/v1"
+	"github.com/fernandoocampo/job-scheduling-operator/internal/jobs"
+	"github.com/go-logr/logr"
 )
-
-// jobStateType computejob state type
-type jobStateType string
-
-// actionType defines the action to execute for the operator
-type actionType string
 
 // ComputeJobReconciler reconciles a ComputeJob object
 type ComputeJobReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-}
-
-// computeJobState
-type computeJobState struct {
-	newState       jobStateType
-	action         actionType
-	startTime      string
-	endTime        string
-	availableNodes string
+	logger *logr.Logger
 }
 
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computejobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computejobs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computejobs/finalizers,verbs=update
 
-// States
-const (
-	pending   jobStateType = "Pending"
-	running   jobStateType = "running"
-	completed jobStateType = "completed"
-	failed    jobStateType = "failed"
-	suspended jobStateType = "suspended"
-)
-
-// Actions
-const (
-	createJob   actionType = "createJob"
-	updateState actionType = "updateState"
-	updateJob   actionType = "updateJob"
-	doNothing   actionType = "doNothing"
-)
-
 // Keys
 const (
 	jobOwnerKey = ".metadata.controller"
-	finalizer   = "app.openinnovation.ai/finalizer"
-)
-
-// Job Specs
-const (
-	containerName            = "job-service"
-	containerImageName       = "perl:5.34.0"
-	jobBackoffLimit    int32 = 1
-)
-
-// Common Labels
-const (
-	appNameKey        = "app.openinnovation.ai/name"
-	appComponentKey   = "app.openinnovation.ai/component"
-	appComponentValue = "job-scheduling-operator"
-	jobNameKey        = "batch.kubernetes.io/job-name"
-)
-
-var (
-	apiGVStr = jobapiv1.GroupVersion.String()
 )
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -116,10 +66,11 @@ var (
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.4/pkg/reconcile
 func (r *ComputeJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	r.logger = &logger
 
 	computeJob, err := r.getComputeJob(ctx, req.NamespacedName)
 	if err != nil {
-		logger.Error(err, "fetching ComputeJob", "name", req.NamespacedName)
+		r.logger.Error(err, "fetching ComputeJob", "name", req.NamespacedName)
 
 		return ctrl.Result{}, err
 	}
@@ -130,54 +81,36 @@ func (r *ComputeJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	computeJobNextState, err := r.getComputeJobNextState(ctx, computeJob)
 	if err != nil {
-		logger.Error(err, "getting compute job next step: %w", err)
+		r.logger.Error(err, "getting compute job next step: %w", err)
 		return ctrl.Result{}, err
 	}
 
-	switch computeJobNextState.action {
-	case createJob:
-		logger.Info("updating computejob state before creating job",
+	switch computeJobNextState.Action {
+	case jobs.CreateJobAction:
+		r.logger.Info("creating job", "name", req.NamespacedName, "new_state", computeJobNextState.NewState)
+		err := r.doCreateJob(ctx, req, computeJobNextState)
+		if err != nil {
+			r.logger.Error(err, "doing creationg job action", "computeJob", req.NamespacedName)
+
+			return ctrl.Result{}, err
+		}
+	case jobs.UpdateStateAction:
+		r.logger.Info("updating computejob state",
 			"name", req.NamespacedName,
-			"new_state", computeJobNextState.newState)
+			"new_state", computeJobNextState.NewState)
 		err := r.updateJobState(ctx, req.NamespacedName, computeJobNextState)
 		if err != nil {
-			logger.Error(err, "updating job status in create job action", "job", req.NamespacedName, "state", pending)
+			r.logger.Error(err, "updating job status in update state action", "job", req.NamespacedName, "state", jobs.PendingState)
 			return ctrl.Result{}, err
 		}
-
-		computeJob, err := r.getComputeJob(ctx, req.NamespacedName)
-		if err != nil {
-			logger.Error(err, "re-fetching ComputeJob", "name", req.NamespacedName)
-
-			return ctrl.Result{}, err
-		}
-
-		logger.Info("creating new batch job",
-			"name", req.NamespacedName,
-			"new_state", computeJobNextState.newState)
-		err = r.createJob(ctx, computeJob)
-		if err != nil {
-			logger.Error(err, "creating Job", "job", req.NamespacedName)
-
-			return ctrl.Result{}, err
-		}
-	case updateState:
-		logger.Info("updating computejob state",
-			"name", req.NamespacedName,
-			"new_state", computeJobNextState.newState)
-		err := r.updateJobState(ctx, req.NamespacedName, computeJobNextState)
-		if err != nil {
-			logger.Error(err, "updating job status in update state action", "job", req.NamespacedName, "state", pending)
-			return ctrl.Result{}, err
-		}
-	case doNothing:
+	case jobs.DoNothingAction:
 		return ctrl.Result{}, nil
-	case updateJob:
-		logger.Info("updating batch job state because is not the desired state",
+	case jobs.UpdateJobAction:
+		r.logger.Info("updating batch job state because is not the desired state",
 			"name", req.NamespacedName)
 		err := r.updateBatchJob(ctx, req.NamespacedName)
 		if err != nil {
-			logger.Error(err, "updating job due to lack of desired state", "job", req.NamespacedName, "state", pending)
+			r.logger.Error(err, "updating job due to lack of desired state", "job", req.NamespacedName, "state", jobs.PendingState)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -186,12 +119,34 @@ func (r *ComputeJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-func (r *ComputeJobReconciler) getComputeJobNextState(ctx context.Context, computeJob *jobapiv1.ComputeJob) (*computeJobState, error) {
-	var result computeJobState
+func (r *ComputeJobReconciler) doCreateJob(ctx context.Context, req ctrl.Request, computeJobNextState *jobs.ComputeJobState) error {
+	r.logger.Info("updating computejob state before creating job",
+		"name", req.NamespacedName,
+		"new_state", computeJobNextState.NewState)
+	err := r.updateJobState(ctx, req.NamespacedName, computeJobNextState)
+	if err != nil {
+		return fmt.Errorf("unable to update job state: %w", err)
+	}
+
+	computeJob, err := r.getComputeJob(ctx, req.NamespacedName)
+	if err != nil {
+		return fmt.Errorf("unable re-fetch computejob: %w", err)
+	}
+
+	err = r.createJob(ctx, computeJob)
+	if err != nil {
+		return fmt.Errorf("unable to create job: %w", err)
+	}
+
+	return nil
+}
+
+func (r *ComputeJobReconciler) getComputeJobNextState(ctx context.Context, computeJob *jobapiv1.ComputeJob) (*jobs.ComputeJobState, error) {
+	var result jobs.ComputeJobState
 
 	if computeJob.Status.State == "" {
-		result.newState = pending
-		result.action = createJob
+		result.NewState = jobs.PendingState
+		result.Action = jobs.CreateJobAction
 		return &result, nil
 	}
 
@@ -201,42 +156,42 @@ func (r *ComputeJobReconciler) getComputeJobNextState(ctx context.Context, compu
 	}
 
 	if job == nil {
-		result.action = doNothing
+		result.Action = jobs.DoNothingAction
 		return &result, nil
 	}
 
-	isJobDesiredState := hasJobDesiredState(computeJob, job)
+	isJobDesiredState := jobs.HasJobDesiredState(computeJob, job)
 	if !isJobDesiredState {
-		result.action = updateJob
+		result.Action = jobs.UpdateJobAction
 		return &result, nil
 	}
 
 	if job.Status.StartTime != nil {
-		result.startTime = job.Status.StartTime.Format(time.RFC3339)
+		result.StartTime = job.Status.StartTime.Format(time.RFC3339)
 	}
 	if job.Status.CompletionTime != nil {
-		result.endTime = job.Status.CompletionTime.Format(time.RFC3339)
+		result.EndTime = job.Status.CompletionTime.Format(time.RFC3339)
 	}
 
-	switch getCurrentJobState(job) {
+	switch jobs.GetCurrentJobState(job) {
 	case "":
 		nodes, err := r.getJobNodes(ctx, job.Namespace, job.Name)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get job nodes: %w", err)
 		}
 
-		result.availableNodes = nodes
-		result.newState = running
-		result.action = updateState
+		result.AvailableNodes = nodes
+		result.NewState = jobs.RunningState
+		result.Action = jobs.UpdateStateAction
 	case batchv1.JobFailed:
-		result.newState = failed
-		result.action = updateState
+		result.NewState = jobs.FailedState
+		result.Action = jobs.UpdateStateAction
 	case batchv1.JobComplete:
-		result.newState = completed
-		result.action = updateState
+		result.NewState = jobs.CompletedState
+		result.Action = jobs.UpdateStateAction
 	default:
-		result.newState = running
-		result.action = updateState
+		result.NewState = jobs.RunningState
+		result.Action = jobs.UpdateStateAction
 	}
 
 	return &result, nil
@@ -245,7 +200,7 @@ func (r *ComputeJobReconciler) getComputeJobNextState(ctx context.Context, compu
 func (r *ComputeJobReconciler) getComputeJob(ctx context.Context, namespacedName types.NamespacedName) (*jobapiv1.ComputeJob, error) {
 	computeJob := jobapiv1.ComputeJob{}
 	err := r.Get(ctx, namespacedName, &computeJob)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
 	}
 
@@ -259,7 +214,7 @@ func (r *ComputeJobReconciler) getComputeJob(ctx context.Context, namespacedName
 func (r *ComputeJobReconciler) getBatchJob(ctx context.Context, namespacedName types.NamespacedName) (*batchv1.Job, error) {
 	batchJob := batchv1.Job{}
 	err := r.Get(ctx, namespacedName, &batchJob)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
 	}
 
@@ -270,7 +225,7 @@ func (r *ComputeJobReconciler) getBatchJob(ctx context.Context, namespacedName t
 	return &batchJob, nil
 }
 
-func (r *ComputeJobReconciler) updateJobState(ctx context.Context, namespacedName types.NamespacedName, state *computeJobState) error {
+func (r *ComputeJobReconciler) updateJobState(ctx context.Context, namespacedName types.NamespacedName, state *jobs.ComputeJobState) error {
 	if state == nil {
 		return nil
 	}
@@ -284,18 +239,18 @@ func (r *ComputeJobReconciler) updateJobState(ctx context.Context, namespacedNam
 		return nil
 	}
 
-	computeJob.Status.State = state.newState.String()
+	computeJob.Status.State = state.NewState.String()
 
-	if state.startTime != "" && computeJob.Status.StartTime != state.startTime {
-		computeJob.Status.StartTime = state.startTime
+	if state.StartTime != "" && computeJob.Status.StartTime != state.StartTime {
+		computeJob.Status.StartTime = state.StartTime
 	}
 
-	if state.endTime != "" && computeJob.Status.EndTime != state.endTime {
-		computeJob.Status.EndTime = state.endTime
+	if state.EndTime != "" && computeJob.Status.EndTime != state.EndTime {
+		computeJob.Status.EndTime = state.EndTime
 	}
 
-	if state.availableNodes != "" && computeJob.Status.ActiveNodes != state.availableNodes {
-		computeJob.Status.ActiveNodes = state.availableNodes
+	if state.AvailableNodes != "" && computeJob.Status.ActiveNodes != state.AvailableNodes {
+		computeJob.Status.ActiveNodes = state.AvailableNodes
 	}
 
 	err = r.Status().Update(ctx, computeJob)
@@ -308,7 +263,7 @@ func (r *ComputeJobReconciler) updateJobState(ctx context.Context, namespacedNam
 
 func (r *ComputeJobReconciler) getJobNodes(ctx context.Context, namespace, jobName string) (string, error) {
 	var pods corev1.PodList
-	if err := r.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels{jobNameKey: jobName}); err != nil {
+	if err := r.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels{jobs.JobNameKey: jobName}); err != nil {
 		return "", fmt.Errorf("unable to list job pods: %w", err)
 	}
 
@@ -327,7 +282,11 @@ func (r *ComputeJobReconciler) getJobNodes(ctx context.Context, namespace, jobNa
 
 // createJob build and create a k8s job
 func (r *ComputeJobReconciler) createJob(ctx context.Context, computeJob *jobapiv1.ComputeJob) error {
-	newJob, err := r.buildJob(computeJob)
+	nodesToRun, err := r.getNodesToRun(ctx, computeJob)
+	if err != nil {
+		return fmt.Errorf("unable to get nodes to run: %w", err)
+	}
+	newJob, err := jobs.BuildJob(computeJob, r.Scheme, nodesToRun)
 	if err != nil {
 		return fmt.Errorf("unable to build job from template: %w", err)
 	}
@@ -374,88 +333,48 @@ func (r *ComputeJobReconciler) updateBatchJob(ctx context.Context, namespacedNam
 	return nil
 }
 
-// buildJob build a k8s job object
-func (r *ComputeJobReconciler) buildJob(computeJob *jobapiv1.ComputeJob) (*batchv1.Job, error) {
-	newJob := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels:      make(map[string]string),
-			Annotations: make(map[string]string),
-			Name:        computeJob.Name,
-			Namespace:   computeJob.Namespace,
-		},
-		Spec: batchv1.JobSpec{
-			Parallelism: getInt32Ptr(computeJob.Spec.Parallelism),
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:    containerName,
-							Image:   containerImageName,
-							Command: computeJob.Spec.Command,
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector:  computeJob.Spec.NodeSelector,
-				},
-			},
-			BackoffLimit: getInt32Ptr(jobBackoffLimit),
-		},
+func (r *ComputeJobReconciler) getNodesToRun(ctx context.Context, computeJob *jobapiv1.ComputeJob) ([]string, error) {
+	computeNodes, err := r.getComputeNodes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to calculate nodes to use: %w", err)
 	}
 
-	for k, v := range computeJob.Annotations {
-		newJob.Annotations[k] = v
-	}
-	for k, v := range computeJob.Labels {
-		newJob.Labels[k] = v
+	// let's set it free to choose any node (no rules about this)
+	if len(computeNodes) == 0 {
+		return nil, errors.New("no node has been specified as computeNode")
 	}
 
-	newJob.Labels[appNameKey] = computeJob.Name
-	newJob.Labels[appComponentKey] = appComponentValue
-
-	if err := ctrl.SetControllerReference(computeJob, newJob, r.Scheme); err != nil {
-		return nil, err
+	result, err := jobs.CalculateNodesForJob(ctx, computeJob, computeNodes)
+	if err != nil {
+		return nil, fmt.Errorf("unable to calculate nodes for job: %w", err)
 	}
 
-	return newJob, nil
+	return result, nil
 }
 
-func getCurrentJobState(job *batchv1.Job) batchv1.JobConditionType {
-	for _, c := range job.Status.Conditions {
-		if (c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed) && c.Status == corev1.ConditionTrue {
-			return c.Type
+// getComputeNode get a compute node object with the given namespaced name
+func (r *ComputeJobReconciler) getComputeNodes(ctx context.Context) ([]jobs.ComputeNodeResourcesItem, error) {
+	computeNodes := jobapiv1.ComputeNodeList{}
+	err := r.List(ctx, &computeNodes)
+	if err != nil && apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to get computeNode list: %w", err)
+	}
+
+	result := make([]jobs.ComputeNodeResourcesItem, len(computeNodes.Items))
+
+	for i, computeNode := range computeNodes.Items {
+		result[i] = jobs.ComputeNodeResourcesItem{
+			Name:   computeNode.Spec.Node,
+			CPU:    computeNode.Spec.Resources.CPU,
+			Memory: computeNode.Spec.Resources.Memory,
 		}
 	}
 
-	return ""
-}
-
-func hasJobDesiredState(desiredState *jobapiv1.ComputeJob, currentState *batchv1.Job) bool {
-	hasDesiredState := true
-	if currentState.Spec.Parallelism != nil && *currentState.Spec.Parallelism != desiredState.Spec.Parallelism {
-		hasDesiredState = false
-	}
-
-	if !maps.Equal(currentState.Spec.Template.Spec.NodeSelector, desiredState.Spec.NodeSelector) {
-		hasDesiredState = false
-	}
-
-	if len(currentState.Spec.Template.Spec.Containers) != 1 {
-		hasDesiredState = false
-	}
-
-	if !slices.Equal(currentState.Spec.Template.Spec.Containers[0].Command, desiredState.Spec.Command) {
-		hasDesiredState = false
-	}
-
-	return hasDesiredState
-}
-
-func getInt32Ptr(val int32) *int32 {
-	return &val
-}
-
-func (j jobStateType) String() string {
-	return string(j)
+	return result, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -468,7 +387,7 @@ func (r *ComputeJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 		// ...make sure it's a Job...
-		if owner.APIVersion != apiGVStr || owner.Kind != "Job" {
+		if owner.APIVersion != jobapiv1.GroupVersion.String() || owner.Kind != "Job" {
 			return nil
 		}
 

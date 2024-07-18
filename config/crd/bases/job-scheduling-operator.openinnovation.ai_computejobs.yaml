@@ -45,9 +45,16 @@ spec:
                   type: string
                 type: array
               nodeSelector:
-                additionalProperties:
-                  type: string
                 description: Criteria for selecting nodes to run the job
+                properties:
+                  cpu:
+                    description: CPU required by the job
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  nodeName:
+                    description: Node name to run the job
+                    type: string
                 type: object
               parallelism:
                 description: The number of nodes the job should run on simultaneously

@@ -18,6 +18,7 @@ package controller_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -53,8 +54,8 @@ func TestCreateJob(t *testing.T) {
 		},
 		Spec: jobschedulingoperatorv1.ComputeJobSpec{
 			Command: []string{"perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"},
-			NodeSelector: map[string]string{
-				"kubernetes.io/hostname": "kind-3-worker2",
+			NodeSelector: &jobschedulingoperatorv1.NodeSelector{
+				NodeName: getStringPtr("kind-3-worker2"),
 			},
 			Parallelism: int32(1),
 		},
@@ -81,17 +82,32 @@ func TestCreateJob(t *testing.T) {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": "kind-3-worker2",
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/hostname",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"kind-3-worker2"},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 			BackoffLimit: getInt32Ptr(1),
 		},
 	}
+	existingComputeNode := buildComputeNodeFixture("computenode-sample", "default", "kind-3-worker2", "Running")
 	givenComputeJob := buildComputeJobSampleFixture("computejob-sample", "default")
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(givenComputeJob).
+		WithObjects(givenComputeJob, existingComputeNode).
 		WithScheme(scheme).
 		WithStatusSubresource(givenComputeJob).
 		Build()
@@ -136,8 +152,8 @@ func TestDoNothing(t *testing.T) {
 		},
 		Spec: jobschedulingoperatorv1.ComputeJobSpec{
 			Command: []string{"perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"},
-			NodeSelector: map[string]string{
-				"kubernetes.io/hostname": "kind-3-worker2",
+			NodeSelector: &jobschedulingoperatorv1.NodeSelector{
+				NodeName: getStringPtr("kind-3-worker2"),
 			},
 			Parallelism: int32(1),
 		},
@@ -191,8 +207,8 @@ func TestUpdateComputeJobStateToRunning(t *testing.T) {
 		},
 		Spec: jobschedulingoperatorv1.ComputeJobSpec{
 			Command: []string{"perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"},
-			NodeSelector: map[string]string{
-				"kubernetes.io/hostname": "kind-3-worker2",
+			NodeSelector: &jobschedulingoperatorv1.NodeSelector{
+				NodeName: getStringPtr("kind-3-worker2"),
 			},
 			Parallelism: int32(1),
 		},
@@ -221,8 +237,22 @@ func TestUpdateComputeJobStateToRunning(t *testing.T) {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": "kind-3-worker2",
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/hostname",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"kind-3-worker2"},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -288,8 +318,8 @@ func TestUpdateComputeJobStateToCompleted(t *testing.T) {
 		},
 		Spec: jobschedulingoperatorv1.ComputeJobSpec{
 			Command: []string{"perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"},
-			NodeSelector: map[string]string{
-				"kubernetes.io/hostname": "kind-3-worker2",
+			NodeSelector: &jobschedulingoperatorv1.NodeSelector{
+				NodeName: getStringPtr("kind-3-worker2"),
 			},
 			Parallelism: int32(1),
 		},
@@ -319,8 +349,22 @@ func TestUpdateComputeJobStateToCompleted(t *testing.T) {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": "kind-3-worker2",
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/hostname",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"kind-3-worker2"},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -381,8 +425,8 @@ func TestUpdateComputeJobStateToFailed(t *testing.T) {
 		},
 		Spec: jobschedulingoperatorv1.ComputeJobSpec{
 			Command: []string{"perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"},
-			NodeSelector: map[string]string{
-				"kubernetes.io/hostname": "kind-3-worker2",
+			NodeSelector: &jobschedulingoperatorv1.NodeSelector{
+				NodeName: getStringPtr("kind-3-worker2"),
 			},
 			Parallelism: int32(1),
 		},
@@ -411,8 +455,22 @@ func TestUpdateComputeJobStateToFailed(t *testing.T) {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": "kind-3-worker2",
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/hostname",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"kind-3-worker2"},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -484,8 +542,22 @@ func TestUpdateJobDueToUndesiredState(t *testing.T) {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": "kind-3-worker2",
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/hostname",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"kind-3-worker2"},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -500,7 +572,7 @@ func TestUpdateJobDueToUndesiredState(t *testing.T) {
 			Namespace:   "default",
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism: getInt32Ptr(int32(1)),
+			Parallelism: getInt32Ptr(int32(2)),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -511,8 +583,22 @@ func TestUpdateJobDueToUndesiredState(t *testing.T) {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": "kind-3-worker3",
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/hostname",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"kind-3-worker2"},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -520,9 +606,10 @@ func TestUpdateJobDueToUndesiredState(t *testing.T) {
 		},
 	}
 
+	existingComputeNode := buildComputeNodeFixture("computenode-sample", "default", "kind-3-worker2", "Running")
 	givenComputeJob := buildRunningComputeJobSampleFixture("computejob-sample", "default")
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(givenComputeJob, existingBatchJob).
+		WithObjects(givenComputeJob, existingBatchJob, existingComputeNode).
 		WithScheme(scheme).
 		WithStatusSubresource(givenComputeJob).
 		Build()
@@ -601,8 +688,8 @@ func buildComputeJobSampleFixture(name, namespace string) *jobschedulingoperator
 		},
 		Spec: jobschedulingoperatorv1.ComputeJobSpec{
 			Command: []string{"perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"},
-			NodeSelector: map[string]string{
-				"kubernetes.io/hostname": "kind-3-worker2",
+			NodeSelector: &jobschedulingoperatorv1.NodeSelector{
+				NodeName: getStringPtr("kind-3-worker2"),
 			},
 			Parallelism: int32(1),
 		},
@@ -629,7 +716,44 @@ func buildRunningComputeJobSampleFixture(name, namespace string) *jobschedulingo
 	return newComputeJob
 }
 
+func buildComputeNodesFixture(namespace, state string, quantity int) []*jobschedulingoperatorv1.ComputeNode {
+	baseName := "computenode-sample-%d"
+	baseNodeName := "kind-3-worker-%d"
+
+	result := make([]*jobschedulingoperatorv1.ComputeNode, quantity)
+	for i := range quantity {
+		name := fmt.Sprintf(baseName, i)
+		nodeName := fmt.Sprintf(baseNodeName, i)
+		result[i] = buildComputeNodeFixture(name, namespace, nodeName, state)
+	}
+
+	return result
+}
+
+func buildComputeNodeFixture(name, namespace, nodeName, state string) *jobschedulingoperatorv1.ComputeNode {
+	return &jobschedulingoperatorv1.ComputeNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: jobschedulingoperatorv1.ComputeNodeSpec{
+			Node: nodeName,
+			Resources: jobschedulingoperatorv1.Resources{
+				CPU:    8,
+				Memory: 6060,
+			},
+		},
+		Status: jobschedulingoperatorv1.ComputeNodeStatus{
+			State: state,
+		},
+	}
+}
+
 func getInt32Ptr(val int32) *int32 {
+	return &val
+}
+
+func getStringPtr(val string) *string {
 	return &val
 }
 
