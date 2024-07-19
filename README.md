@@ -218,3 +218,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+ 9002  kubebuilder init --domain openinnovation.ai --repo github.com/fernandoocampo/job-scheduling-operator
+ 9031  kubebuilder create api --group job-scheduling-operator --version v1 --kind ComputeNode
+ 9033  kubebuilder create api --group job-scheduling-operator --version v1 --kind ComputeJob

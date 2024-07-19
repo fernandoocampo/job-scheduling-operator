@@ -7,7 +7,7 @@ metadata:
   name: computejob-sample
   namespace: job-scheduling-operator-system
 spec:
-  command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(2000)"]
+  command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(3000)"]
   parallelism: 1
   nodeSelector:
     nodeName: kind-worker

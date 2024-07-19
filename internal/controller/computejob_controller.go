@@ -121,6 +121,7 @@ func (r *ComputeJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
+// doCreateJob runs the job creation process
 func (r *ComputeJobReconciler) doCreateJob(ctx context.Context, req ctrl.Request, computeJobNextState *jobs.ComputeJobState) error {
 	r.logger.Info("updating computejob state before creating job",
 		"name", req.NamespacedName,
@@ -143,6 +144,7 @@ func (r *ComputeJobReconciler) doCreateJob(ctx context.Context, req ctrl.Request
 	return nil
 }
 
+// getComputeJobNextState calculates next state for computejob object based on the cluster current state.
 func (r *ComputeJobReconciler) getComputeJobNextState(ctx context.Context, computeJob *jobapiv1.ComputeJob) (*jobs.ComputeJobState, error) {
 	var result jobs.ComputeJobState
 
@@ -199,6 +201,7 @@ func (r *ComputeJobReconciler) getComputeJobNextState(ctx context.Context, compu
 	return &result, nil
 }
 
+// getComputeJob gets computejob object from cluster.
 func (r *ComputeJobReconciler) getComputeJob(ctx context.Context, namespacedName types.NamespacedName) (*jobapiv1.ComputeJob, error) {
 	computeJob := jobapiv1.ComputeJob{}
 	err := r.Get(ctx, namespacedName, &computeJob)
@@ -213,6 +216,7 @@ func (r *ComputeJobReconciler) getComputeJob(ctx context.Context, namespacedName
 	return &computeJob, nil
 }
 
+// getBatchJob get batch job object from cluster.
 func (r *ComputeJobReconciler) getBatchJob(ctx context.Context, namespacedName types.NamespacedName) (*batchv1.Job, error) {
 	batchJob := batchv1.Job{}
 	err := r.Get(ctx, namespacedName, &batchJob)
@@ -227,6 +231,7 @@ func (r *ComputeJobReconciler) getBatchJob(ctx context.Context, namespacedName t
 	return &batchJob, nil
 }
 
+// updateJobState updates computejob object state
 func (r *ComputeJobReconciler) updateJobState(ctx context.Context, namespacedName types.NamespacedName, state *jobs.ComputeJobState) error {
 	if state == nil {
 		return nil
@@ -263,6 +268,7 @@ func (r *ComputeJobReconciler) updateJobState(ctx context.Context, namespacedNam
 	return nil
 }
 
+// getJobNodes gets the nodes used by the job to run based on the pods created for that purpose.
 func (r *ComputeJobReconciler) getJobNodes(ctx context.Context, namespace, jobName string) (string, error) {
 	var pods corev1.PodList
 	if err := r.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels{jobs.JobNameKey: jobName}); err != nil {
@@ -335,6 +341,8 @@ func (r *ComputeJobReconciler) updateBatchJob(ctx context.Context, namespacedNam
 	return nil
 }
 
+// getNodesToRun get existing compute nodes with running state and calculate which compute nodes fit the demanded
+// resources.
 func (r *ComputeJobReconciler) getNodesToRun(ctx context.Context, computeJob *jobapiv1.ComputeJob) ([]string, error) {
 	computeNodes, err := r.getComputeNodes(ctx)
 	if err != nil {

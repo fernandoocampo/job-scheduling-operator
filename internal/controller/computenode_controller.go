@@ -25,7 +25,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	jobapiv1 "github.com/fernandoocampo/job-scheduling-operator/api/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,14 +35,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // nodeStatusType node status type
 type nodeStatusType string
-
-//
 
 // ComputeNodeReconciler reconciles a ComputeNode object
 type ComputeNodeReconciler struct {
@@ -51,7 +50,8 @@ type ComputeNodeReconciler struct {
 
 // template fields
 const (
-	nodeField = ".spec.node"
+	nodeField         = ".spec.node"
+	nodeFinalizerName = "node.openinnovation.ai/finalizer"
 )
 
 // node states
@@ -94,7 +94,26 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	exist, err := r.doesComputeNodeExist(ctx, computeNode.Spec.Node)
+	if isComputeNodeUnderDeletion(computeNode) {
+		err := r.deleteResources(ctx, computeNode)
+		if err != nil {
+			logger.Error(err, "deleting resources", "name", req.NamespacedName.String())
+
+			return ctrl.Result{}, err
+		}
+
+		logger.Info("deleting compute node", "name", req.NamespacedName.String())
+		return ctrl.Result{}, nil
+	}
+
+	err = r.addFinalizer(ctx, computeNode)
+	if err != nil {
+		logger.Error(err, "adding finalizer", "name", req.NamespacedName.String())
+
+		return ctrl.Result{}, err
+	}
+
+	exist, err := r.doesComputeNodeExist(ctx, computeNode)
 	if err != nil {
 		logger.Error(err, "checking if ComputeNode with given Node already exists", "name", req.NamespacedName.String())
 		return ctrl.Result{}, nil
@@ -102,6 +121,7 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	if exist {
 		r.Recorder.Event(computeNode, "Warning", "ComputeNodeAlreadyExists", "An Update to this ComputeNode was triggered, however the node it represents was taken by another object as well")
+		return ctrl.Result{}, nil
 	}
 
 	nodeStatus, err := r.getNodeStatus(ctx, computeNode)
@@ -120,6 +140,7 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	err = r.updateComputeNodeState(ctx, computeNode, nodeStatus)
 	if err != nil {
 		logger.Error(err, "updating computeNode state", "name", req.NamespacedName, "new_state", nodeStatus)
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -199,10 +220,10 @@ func (r *ComputeNodeReconciler) getNode(ctx context.Context, name string) (*core
 }
 
 // doesComputeNodeExist check if a computenode with the given node name already exists
-func (r *ComputeNodeReconciler) doesComputeNodeExist(ctx context.Context, nodeName string) (bool, error) {
+func (r *ComputeNodeReconciler) doesComputeNodeExist(ctx context.Context, computeNode *jobapiv1.ComputeNode) (bool, error) {
 	computeNodes := jobapiv1.ComputeNodeList{}
 	listOps := &client.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(nodeField, nodeName),
+		FieldSelector: fields.OneTermEqualSelector(nodeField, computeNode.Spec.Node),
 	}
 	err := r.List(ctx, &computeNodes, listOps)
 	if err != nil && apierrors.IsNotFound(err) {
@@ -213,13 +234,51 @@ func (r *ComputeNodeReconciler) doesComputeNodeExist(ctx context.Context, nodeNa
 		return false, fmt.Errorf("unable to get computeNode list: %w", err)
 	}
 
-	if len(computeNodes.Items) > 0 {
+	if len(computeNodes.Items) > 1 {
 		return true, nil
 	}
 
 	return false, nil
 }
 
+func (r *ComputeNodeReconciler) deleteResources(ctx context.Context, computeNode *jobapiv1.ComputeNode) error {
+	if !controllerutil.ContainsFinalizer(computeNode, nodeFinalizerName) {
+		return nil
+	}
+
+	controllerutil.RemoveFinalizer(computeNode, nodeFinalizerName)
+
+	err := r.Update(ctx, computeNode)
+	if err != nil {
+		return fmt.Errorf("unable to update computenode after removing finalizer: %w", err)
+	}
+
+	log.FromContext(ctx).Info("cleaning some resources before deleting compute node object", "name", computeNode.Name)
+
+	return nil
+}
+
+// addFinalizer add finalizer to computenode object if it does not have any
+func (r *ComputeNodeReconciler) addFinalizer(ctx context.Context, computeNode *jobapiv1.ComputeNode) error {
+	if controllerutil.ContainsFinalizer(computeNode, nodeFinalizerName) {
+		return nil
+	}
+
+	controllerutil.AddFinalizer(computeNode, nodeFinalizerName)
+
+	err := r.Update(ctx, computeNode)
+	if err != nil {
+		return fmt.Errorf("unable to add finalizer: %w", err)
+	}
+
+	return nil
+}
+
+func isComputeNodeUnderDeletion(computeNode *jobapiv1.ComputeNode) bool {
+	return !computeNode.ObjectMeta.DeletionTimestamp.IsZero()
+}
+
+// getState calculates ComputeNode state
 func getState(node *corev1.Node) nodeStatusType {
 	for _, c := range node.Status.Conditions {
 		if c.Status == corev1.ConditionFalse || c.Status == corev1.ConditionUnknown {
@@ -251,14 +310,22 @@ func (r *ComputeNodeReconciler) findObjectsForNodes(ctx context.Context, node cl
 		return []reconcile.Request{}
 	}
 
-	requests := make([]reconcile.Request, len(attachedNodes.Items))
-	for i, item := range attachedNodes.Items {
-		requests[i] = reconcile.Request{
+	var requests []reconcile.Request
+	for _, item := range attachedNodes.Items {
+		if item.Spec.Node != node.GetName() {
+			continue
+		}
+
+		if item.Status.State == getState(node.(*corev1.Node)).String() {
+			return requests
+		}
+		requests = append(requests, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      item.GetName(),
 				Namespace: item.GetNamespace(),
 			},
-		}
+		})
+		break
 	}
 
 	return requests
