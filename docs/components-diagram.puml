@@ -1,0 +1,32 @@
+@startuml solution
+
+title Job Scheduling Operator Components
+
+left to right direction
+
+component "job-scheculing-operator" <<manager>> as joboperator
+component "controller-runtime-client" <<client>> as ctrlclient
+component "ComputeNode" <<controller>> as computenode
+component "ComputeJob" <<controller>> as computejob
+component "Job" <<Batch Job>> as batchjob
+component "Node" <<Core>> as node
+component "ComputeJob" <<Custom Resource>> as computejobcr
+component "ComputeNode" <<Custom Resource>> as computenodecr
+component "ComputeJob" <<API>> as computejobapi
+component "ComputeNode" <<API>> as computenodeapi
+component "ComputeNode" <<CRD>> as computenodecrd
+component "ComputeJob" <<CRD>> as computejobcrd
+
+joboperator -right-> ctrlclient
+joboperator -down-> computenode
+joboperator -down-> computejob
+computejob --> batchjob
+computejob --> computejobcr
+computejob -left-> computejobapi
+computejobapi -left-> computejobcrd
+computenode --> computenodecr
+computenode --> node: watches
+computenode -right-> computenodeapi
+computenodeapi -right-> computenodecrd
+
+@enduml
