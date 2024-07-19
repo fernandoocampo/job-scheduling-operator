@@ -144,6 +144,14 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: create-compute-node
+create-compute-node: ## create compute node
+	kubectl apply -f config/samples/job-scheduling-operator_v1_computenode_kind.yaml
+
+.PHONY: create-compute-job
+create-compute-job: ## create compute job
+	kubectl apply -f config/samples/job-scheduling-operator_v1_computejob_kind.yaml
+
 .PHONY: create-kind-cluster
 create-kind-cluster: ## create a kind cluster
 	KIND_EXPERIMENTAL_PROVIDER=$(CONTAINER_TOOL) kind create cluster --config=kind-cluster/cluster-one-node.yaml --name kind
@@ -151,14 +159,6 @@ create-kind-cluster: ## create a kind cluster
 .PHONY: delete-kind-cluster
 delete-kind-cluster: ## delete a kind cluster
 	kind delete cluster -n kind
-
-.PHONY: create-compute-node
-create-compute-node: # create compute node
-	kubectl apply -f config/samples/job-scheduling-operator_v1_computenode_kind.yaml
-
-.PHONY: create-compute-job
-create-compute-job: # create compute job
-	kubectl apply -f config/samples/job-scheduling-operator_v1_computejob_kind.yaml
 
 ##@ Dependencies
 

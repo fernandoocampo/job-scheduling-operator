@@ -28,9 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	jobapiv1 "github.com/fernandoocampo/job-scheduling-operator/api/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -44,7 +45,8 @@ type nodeStatusType string
 // ComputeNodeReconciler reconciles a ComputeNode object
 type ComputeNodeReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Recorder record.EventRecorder
+	Scheme   *runtime.Scheme
 }
 
 // template fields
@@ -65,10 +67,11 @@ const (
 // +kubebuilder:rbac:groups=job-scheduling-operator.openinnovation.ai,resources=computenodes/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbas:groups=core,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
+// ComputeNode Controller compares the state specified by
 // the ComputeNode object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
@@ -89,6 +92,16 @@ func (r *ComputeNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	if computeNode == nil {
 		return ctrl.Result{}, nil
+	}
+
+	exist, err := r.doesComputeNodeExist(ctx, computeNode.Spec.Node)
+	if err != nil {
+		logger.Error(err, "checking if ComputeNode with given Node already exists", "name", req.NamespacedName.String())
+		return ctrl.Result{}, nil
+	}
+
+	if exist {
+		r.Recorder.Event(computeNode, "Warning", "ComputeNodeAlreadyExists", "An Update to this ComputeNode was triggered, however the node it represents was taken by another object as well")
 	}
 
 	nodeStatus, err := r.getNodeStatus(ctx, computeNode)
@@ -159,7 +172,7 @@ func isTheSameState(computeNode *jobapiv1.ComputeNode, newState nodeStatusType) 
 func (r *ComputeNodeReconciler) getComputeNode(ctx context.Context, namespacedName types.NamespacedName) (*jobapiv1.ComputeNode, error) {
 	computeNode := jobapiv1.ComputeNode{}
 	err := r.Get(ctx, namespacedName, &computeNode)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
 	}
 
@@ -174,7 +187,7 @@ func (r *ComputeNodeReconciler) getComputeNode(ctx context.Context, namespacedNa
 func (r *ComputeNodeReconciler) getNode(ctx context.Context, name string) (*corev1.Node, error) {
 	node := corev1.Node{}
 	err := r.Get(ctx, types.NamespacedName{Name: name}, &node)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
 	}
 
@@ -183,6 +196,28 @@ func (r *ComputeNodeReconciler) getNode(ctx context.Context, name string) (*core
 	}
 
 	return &node, nil
+}
+
+// doesComputeNodeExist check if a computenode with the given node name already exists
+func (r *ComputeNodeReconciler) doesComputeNodeExist(ctx context.Context, nodeName string) (bool, error) {
+	computeNodes := jobapiv1.ComputeNodeList{}
+	listOps := &client.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(nodeField, nodeName),
+	}
+	err := r.List(ctx, &computeNodes, listOps)
+	if err != nil && apierrors.IsNotFound(err) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("unable to get computeNode list: %w", err)
+	}
+
+	if len(computeNodes.Items) > 0 {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func getState(node *corev1.Node) nodeStatusType {

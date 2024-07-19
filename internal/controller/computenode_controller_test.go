@@ -35,6 +35,7 @@ import (
 	"github.com/fernandoocampo/job-scheduling-operator/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/tools/record"
 )
 
 func TestUpdateComputeNodeStateToRunning(t *testing.T) {
@@ -97,10 +98,12 @@ func TestUpdateComputeNodeStateToRunning(t *testing.T) {
 		WithObjects(givenComputeNode, existingNode).
 		WithScheme(scheme).
 		WithStatusSubresource(givenComputeNode).
+		WithIndex(givenComputeNode, ".spec.node", makeExtractValueFunc()).
 		Build()
 	reconciler := controller.ComputeNodeReconciler{
-		Client: k8sClient,
-		Scheme: scheme,
+		Client:   k8sClient,
+		Recorder: newEventRecorderMock(),
+		Scheme:   scheme,
 	}
 	ctx := context.TODO()
 	req := ctrl.Request{
@@ -183,10 +186,12 @@ func TestUpdateComputeNodeStateToPending(t *testing.T) {
 		WithObjects(givenComputeNode, existingNode).
 		WithScheme(scheme).
 		WithStatusSubresource(givenComputeNode).
+		WithIndex(givenComputeNode, ".spec.node", makeExtractValueFunc()).
 		Build()
 	reconciler := controller.ComputeNodeReconciler{
-		Client: k8sClient,
-		Scheme: scheme,
+		Client:   k8sClient,
+		Recorder: newEventRecorderMock(),
+		Scheme:   scheme,
 	}
 	ctx := context.TODO()
 	req := ctrl.Request{
@@ -233,4 +238,27 @@ func getComputeNode(ctx context.Context, t *testing.T, client client.WithWatch, 
 	require.NoError(t, err)
 
 	return &computeNode
+}
+
+type eventRecorderMock struct {
+	record.EventRecorder
+}
+
+func newEventRecorderMock() *eventRecorderMock {
+	return &eventRecorderMock{}
+}
+
+func (e *eventRecorderMock) Event(object runtime.Object, eventtype, reason, message string) {
+	// Do nothing
+}
+
+func makeExtractValueFunc() func(rawObj client.Object) []string {
+	return func(rawObj client.Object) []string {
+		// Extract the node name from the computenode Spec, if one is provided
+		computeNode := rawObj.(*jobschedulingoperatorv1.ComputeNode)
+		if computeNode.Spec.Node == "" {
+			return nil
+		}
+		return []string{computeNode.Spec.Node}
+	}
 }

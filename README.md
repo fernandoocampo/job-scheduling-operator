@@ -1,8 +1,18 @@
 # job-scheduling-operator
-// TODO(user): Add simple overview of use/purpose
+This operator is responsible for scheduling batch jobs on existing declared nodes.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+This project simulates a distributed job scheduling system. The operator should manage
+compute nodes as Kubernetes Custom resource definition and handle the lifecycle of nodes and jobs within the system.
+
+## Design and Implementation
+
+### Design
+
+### How it works
+* This operator defines 2 controllers to handle node and batch jobs lifecycle. These controllers are ComputeNode and ComputeJob.
+* The ComputeNode controller simply references an existing cluster node. This controller looks for a node referenced by ComputeNode to update its own state.
+* The ComputeJob controller creates batch jobs based on the desired state declared in the ComputeJob custom resources. It assigns a node or a set of them to the batch job using Node Affinity based on the given CPU demand and the specific node name.
 
 ## Getting Started
 
@@ -11,6 +21,22 @@
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
+
+### To Test this project
+
+* To run unit tests.
+
+```sh
+make test
+```
+
+* To run end-to-end tests.
+
+Make sure you are connected to your k8s cluster for testing. You can use a local k8s cluster using [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+
+```sh
+make test-e2e
+```
 
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
@@ -89,8 +115,7 @@ Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project
 kubectl apply -f https://raw.githubusercontent.com/<org>/job-scheduling-operator/<tag or branch>/dist/install.yaml
 ```
 
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+## Make command
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 

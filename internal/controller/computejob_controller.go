@@ -53,12 +53,13 @@ type ComputeJobReconciler struct {
 
 // Keys
 const (
-	jobOwnerKey = ".metadata.controller"
+	jobOwnerKey  = ".metadata.controller"
+	nodeStateKey = ".status.state"
 )
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
+// ComputeJob controller compares the state specified by
 // the ComputeJob object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
@@ -353,9 +354,10 @@ func (r *ComputeJobReconciler) getNodesToRun(ctx context.Context, computeJob *jo
 	return result, nil
 }
 
-// getComputeNode get a compute node object with the given namespaced name
+// getComputeNode get compute node objects with running state.
 func (r *ComputeJobReconciler) getComputeNodes(ctx context.Context) ([]jobs.ComputeNodeResourcesItem, error) {
 	computeNodes := jobapiv1.ComputeNodeList{}
+
 	err := r.List(ctx, &computeNodes)
 	if err != nil && apierrors.IsNotFound(err) {
 		return nil, nil
@@ -368,12 +370,17 @@ func (r *ComputeJobReconciler) getComputeNodes(ctx context.Context) ([]jobs.Comp
 	result := make([]jobs.ComputeNodeResourcesItem, len(computeNodes.Items))
 
 	for i, computeNode := range computeNodes.Items {
+		if computeNode.Status.State != nodeRunning.String() {
+			continue
+		}
 		result[i] = jobs.ComputeNodeResourcesItem{
 			Name:   computeNode.Spec.Node,
 			CPU:    computeNode.Spec.Resources.CPU,
 			Memory: computeNode.Spec.Resources.Memory,
 		}
 	}
+
+	fmt.Println("result", result)
 
 	return result, nil
 }
